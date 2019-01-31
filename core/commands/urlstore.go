@@ -4,15 +4,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	cmdenv "github.com/ipfs/go-ipfs/core/commands/cmdenv"
 	filestore "github.com/ipfs/go-ipfs/filestore"
 	pin "github.com/ipfs/go-ipfs/pin"
 
-	cid "github.com/ipfs/go-cid"
 	chunk "github.com/ipfs/go-ipfs-chunker"
 	cmdkit "github.com/ipfs/go-ipfs-cmdkit"
 	cmds "github.com/ipfs/go-ipfs-cmds"
+	dag "github.com/ipfs/go-merkledag"
 	balanced "github.com/ipfs/go-unixfs/importer/balanced"
 	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
 	trickle "github.com/ipfs/go-unixfs/importer/trickle"
@@ -37,7 +38,7 @@ Add URLs to ipfs without storing the data locally.
 The URL provided must be stable and ideally on a web server under your
 control.
 
-The file is added using raw-leaves but otherwise using the default
+The file is added using raw-leaves by default but otherwise using the default
 settings for 'ipfs add'.
 
 This command is considered temporary until a better solution can be
@@ -48,6 +49,9 @@ time.
 	Options: []cmdkit.Option{
 		cmdkit.BoolOption(trickleOptionName, "t", "Use trickle-dag format for dag generation."),
 		cmdkit.BoolOption(pinOptionName, "Pin this object when adding.").WithDefault(true),
+		cmdkit.IntOption(cidVersionOptionName, "CID version").WithDefault(1),
+		cmdkit.StringOption(hashOptionName, "Hash function to use. Implies CIDv1 if not sha2-256. (experimental)").WithDefault("sha2-256"),
+		cmdkit.BoolOption(rawLeavesOptionName, "Use raw blocks for leaf nodes. (experimental)").WithDefault(true),
 	},
 	Arguments: []cmdkit.Argument{
 		cmdkit.StringArg("url", true, false, "URL to add to IPFS"),
@@ -76,6 +80,23 @@ time.
 
 		useTrickledag, _ := req.Options[trickleOptionName].(bool)
 		dopin, _ := req.Options[pinOptionName].(bool)
+		cidVer, _ := req.Options[cidVersionOptionName].(int)
+		hashFunStr, _ := req.Options[hashOptionName].(string)
+		rawblks, _ := req.Options[rawLeavesOptionName].(bool)
+
+		prefix, err := dag.PrefixForCidVersion(cidVer)
+		if err != nil {
+			return err
+		}
+		if prefix.Version == 0 {
+			rawblks = false
+		}
+
+		hashFunCode, ok := mh.Names[strings.ToLower(hashFunStr)]
+		if !ok {
+			return fmt.Errorf("unrecognized hash function: %s", strings.ToLower(hashFunStr))
+		}
+		prefix.MhType = hashFunCode
 
 		enc, err := cmdenv.GetCidEncoder(req)
 		if err != nil {
@@ -101,10 +122,9 @@ time.
 		}
 
 		chk := chunk.NewSizeSplitter(hres.Body, chunk.DefaultBlockSize)
-		prefix := cid.NewPrefixV1(cid.DagProtobuf, mh.SHA2_256)
 		dbp := &ihelper.DagBuilderParams{
 			Dagserv:    n.DAG,
-			RawLeaves:  true,
+			RawLeaves:  rawblks,
 			Maxlinks:   ihelper.DefaultLinksPerBlock,
 			NoCopy:     true,
 			CidBuilder: &prefix,
