@@ -23,6 +23,7 @@ var log = logging.Logger("filestore")
 
 var ErrFilestoreNotEnabled = errors.New("filestore is not enabled, see https://git.io/vNItf")
 var ErrUrlstoreNotEnabled = errors.New("urlstore is not enabled")
+var ErrNoCopyNotEnabled = errors.New("nocopy requires urlstore or filestore")
 
 // Filestore implements a Blockstore by combining a standard Blockstore
 // to store regular blocks and a special Blockstore called

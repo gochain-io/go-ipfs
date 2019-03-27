@@ -49,8 +49,8 @@ func (api *UnixfsAPI) Add(ctx context.Context, files files.Node, opts ...options
 	//	return
 	//}
 
-	if settings.NoCopy && !cfg.Experimental.FilestoreEnabled {
-		return nil, filestore.ErrFilestoreNotEnabled
+	if settings.NoCopy && !cfg.Experimental.FilestoreEnabled && !cfg.Experimental.UrlstoreEnabled {
+		return nil, filestore.ErrNoCopyNotEnabled
 	}
 
 	addblockstore := api.blockstore
